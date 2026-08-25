@@ -27,6 +27,499 @@ jobs:
         with:
           gradle-version: '8.2'
 
+      - name: Generate All Project Files & Assets
+        run: |
+          mkdir -p app/src/main/java/com/myinsta/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/assets
+
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "InstaVault"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.myinsta.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.myinsta.app"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="InstaVault"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+              <WebView
+                  android:id="@+id/myWebView"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent" />
+          </RelativeLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/myinsta/app/MainActivity.java
+          package com.myinsta.app;
+
+          import android.annotation.SuppressLint;
+          import android.app.DownloadManager;
+          import android.content.Context;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.os.VibrationEffect;
+          import android.os.Vibrator;
+          import android.webkit.CookieManager;
+          import android.webkit.DownloadListener;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.URLUtil;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Toast;
+          import androidx.appcompat.app.AppCompatActivity;
+          import java.io.InputStream;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+
+              @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  webView = findViewById(R.id.myWebView);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setLoadsImagesAutomatically(true);
+                  settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36");
+
+                  webView.addJavascriptInterface(new Object() {
+                      @JavascriptInterface
+                      public void tap() {
+                          runOnUiThread(() -> {
+                              try {
+                                  Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                                  if (vibrator != null && vibrator.hasVibrator()) {
+                                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                          vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK));
+                                      } else {
+                                          vibrator.vibrate(12);
+                                      }
+                                  }
+                              } catch (Exception ignored) {}
+                          });
+                      }
+                  }, "NativeHaptic");
+
+                  webView.setDownloadListener(new DownloadListener() {
+                      @Override
+                      public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimeType, long contentLength) {
+                          try {
+                              DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                              request.setMimeType(mimeType);
+                              String cookies = CookieManager.getInstance().getCookie(url);
+                              request.addRequestHeader("cookie", cookies);
+                              request.addRequestHeader("User-Agent", userAgent);
+                              request.setDescription("Downloading Media...");
+                              request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType));
+                              request.allowScanningByMediaScanner();
+                              request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                              request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimeType));
+
+                              DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                              dm.enqueue(request);
+                              Toast.makeText(getApplicationContext(), "Downloading File...", Toast.LENGTH_SHORT).show();
+                          } catch (Exception e) {
+                              Toast.makeText(getApplicationContext(), "Download Error!", Toast.LENGTH_SHORT).show();
+                          }
+                      }
+                  });
+
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          try {
+                              InputStream input = getAssets().open("insta_engine.js");
+                              byte[] buffer = new byte[input.available()];
+                              input.read(buffer);
+                              input.close();
+                              webView.evaluateJavascript(new String(buffer), null);
+                          } catch (Exception ignored) {}
+                      }
+                  });
+
+                  webView.loadUrl("https://www.instagram.com/");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/assets/insta_engine.js
+          (function () {
+              if (window.igMasterEngineInjected) return;
+              window.igMasterEngineInjected = true;
+
+              function triggerHaptic() {
+                  if (window.NativeHaptic && window.NativeHaptic.tap) {
+                      window.NativeHaptic.tap();
+                  }
+              }
+
+              function optimizeThumbnailUrl(url) {
+                  if (!url || typeof url !== 'string' || !url.includes('cdninstagram.com')) return url;
+                  return url.replace(/\/p\d+x\d+\//g, '/p320x320/').replace(/\/s\d+x\d+\//g, '/s320x320/');
+              }
+
+              function patchProfileGrid() {
+                  if (!window.location.pathname.match(/^\/[A-Za-z0-9_.]+\/?$/)) return;
+                  const gridImages = document.querySelectorAll('main img');
+                  for (let i = 0; i < gridImages.length; i++) {
+                      const img = gridImages[i];
+                      if (img.dataset.turboBoosted) continue;
+                      img.dataset.turboBoosted = '1';
+                      if (img.srcset) img.removeAttribute('srcset');
+                      const optimized = optimizeThumbnailUrl(img.src);
+                      if (optimized !== img.src) img.src = optimized;
+                      img.decoding = 'async';
+                      img.loading = i < 9 ? 'eager' : 'lazy';
+                  }
+              }
+
+              let speedThrottle;
+              const speedObserver = new MutationObserver(() => {
+                  if (speedThrottle) return;
+                  speedThrottle = setTimeout(() => {
+                      patchProfileGrid();
+                      speedThrottle = null;
+                  }, 300);
+              });
+              speedObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+              patchProfileGrid();
+
+              window.addEventListener('load', function () {
+                  const savedPosition = sessionStorage.getItem('ig_scroll_pos_' + window.location.pathname);
+                  if (savedPosition) {
+                      setTimeout(() => {
+                          window.scrollTo(0, parseInt(savedPosition, 10));
+                      }, 300);
+                  }
+              });
+
+              let scrollTimer = null;
+              window.addEventListener('scroll', function () {
+                  if (scrollTimer) clearTimeout(scrollTimer);
+                  scrollTimer = setTimeout(() => {
+                      sessionStorage.setItem('ig_scroll_pos_' + window.location.pathname, window.scrollY);
+                  }, 200);
+              }, { passive: true });
+
+              window.addEventListener('beforeunload', function () {
+                  sessionStorage.setItem('ig_scroll_pos_' + window.location.pathname, window.scrollY);
+              });
+
+              let lastPath = window.location.pathname;
+              setInterval(() => {
+                  if (window.location.pathname !== lastPath) {
+                      lastPath = window.location.pathname;
+                      const newPos = sessionStorage.getItem('ig_scroll_pos_' + lastPath);
+                      if (newPos) {
+                          setTimeout(() => {
+                              window.scrollTo(0, parseInt(newPos, 10));
+                          }, 300);
+                      }
+                  }
+              }, 500);
+
+              const reelCache = new Map();
+              const globalVideoUrls = [];
+
+              function extractVideoUrls(obj) {
+                  if (!obj || typeof obj !== 'object') return;
+                  if (Array.isArray(obj)) {
+                      obj.forEach(item => extractVideoUrls(item));
+                      return;
+                  }
+                  const shortcode = obj.code || obj.shortcode || obj.id || obj.pk;
+                  const vUrl = obj.video_url || (obj.video_versions && obj.video_versions[0]?.url);
+                  if (vUrl) {
+                      if (!globalVideoUrls.includes(vUrl)) {
+                          globalVideoUrls.push(vUrl);
+                          if (globalVideoUrls.length > 25) globalVideoUrls.shift();
+                      }
+                      if (shortcode) reelCache.set(String(shortcode), vUrl);
+                  }
+                  for (let key in obj) {
+                      if (obj[key] && typeof obj[key] === 'object') extractVideoUrls(obj[key]);
+                  }
+              }
+
+              const origFetch = window.fetch;
+              window.fetch = async function (...args) {
+                  const response = await origFetch.apply(this, args);
+                  try {
+                      const clone = response.clone();
+                      clone.json().then(json => extractVideoUrls(json)).catch(() => {});
+                  } catch (e) {}
+                  return response;
+              };
+
+              const origOpen = XMLHttpRequest.prototype.open;
+              XMLHttpRequest.prototype.open = function (method, url) {
+                  this._url = url;
+                  return origOpen.apply(this, arguments);
+              };
+              const origSend = XMLHttpRequest.prototype.send;
+              XMLHttpRequest.prototype.send = function () {
+                  this.addEventListener('load', function () {
+                      try {
+                          if (this.responseText) {
+                              const json = JSON.parse(this.responseText);
+                              extractVideoUrls(json);
+                          }
+                      } catch (e) {}
+                  });
+                  return origSend.apply(this, arguments);
+              };
+
+              async function handleReelClick(videoEl, btn) {
+                  let reelUrl = '';
+                  let shortcode = '';
+                  const container = videoEl.closest('article, div[role="dialog"], main, section');
+                  const link = container ? container.querySelector('a[href*="/reel/"], a[href*="/p/"]') : null;
+                  if (link) {
+                      const m = link.href.match(/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/);
+                      if (m) shortcode = m[1];
+                  }
+                  if (!shortcode) {
+                      const pathMatch = window.location.pathname.match(/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/);
+                      if (pathMatch) shortcode = pathMatch[1];
+                  }
+                  if (shortcode && reelCache.has(shortcode)) reelUrl = reelCache.get(shortcode);
+                  if (!reelUrl && globalVideoUrls.length > 0) reelUrl = globalVideoUrls[globalVideoUrls.length - 1];
+                  if (!reelUrl && videoEl.src && !videoEl.src.startsWith('blob:')) reelUrl = videoEl.src;
+
+                  if (reelUrl) {
+                      triggerHaptic();
+                      window.location.href = reelUrl;
+                  } else {
+                      alert('Reel link not found. Play the video for a second and try again.');
+                  }
+              }
+
+              setInterval(() => {
+                  const videos = document.querySelectorAll('video');
+                  videos.forEach(video => {
+                      const container = video.parentElement;
+                      if (!container) return;
+                      if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
+                      if (!container.querySelector('.ig-ultimate-reel-btn')) {
+                          const btn = document.createElement('button');
+                          btn.className = 'ig-ultimate-reel-btn';
+                          btn.innerHTML = '📥';
+                          btn.style.cssText = 'position: absolute !important; top: 15px !important; right: 15px !important; width: 38px !important; height: 38px !important; border-radius: 50% !important; background: rgba(0, 0, 0, 0.65) !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; font-size: 16px !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 999999 !important; cursor: pointer !important; backdrop-filter: blur(4px); outline: none !important; box-shadow: 0 4px 10px rgba(0,0,0,0.4);';
+                          btn.addEventListener('click', (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleReelClick(video, btn);
+                          });
+                          container.appendChild(btn);
+                      }
+                  });
+              }, 1000);
+
+              let pressTimer = null;
+              let startX = 0;
+              let startY = 0;
+              let targetPoint = { x: 0, y: 0 };
+
+              const popup = document.createElement('div');
+              popup.id = 'ig-custom-popup';
+              popup.innerHTML = `
+                  <button id="ig-save-btn" style="
+                      background: #1f1b1d;
+                      color: #ffffff;
+                      border: 1px solid rgba(255, 255, 255, 0.12);
+                      padding: 10px 18px;
+                      border-radius: 14px;
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      font-size: 15px;
+                      font-weight: 500;
+                      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+                      cursor: pointer;
+                      outline: none;
+                      display: flex;
+                      align-items: center;
+                      gap: 12px;
+                      user-select: none;
+                      -webkit-tap-highlight-color: transparent;
+                      transform: scale(0.6);
+                      opacity: 0;
+                      transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.15s ease;
+                  ">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d5b4be" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span style="letter-spacing: 0.2px;">Download image</span>
+                  </button>
+              `;
+              popup.style.cssText = 'position: fixed; z-index: 2147483647; display: none; transform: translate(-50%, -100%);';
+              (document.body || document.documentElement).appendChild(popup);
+
+              const saveBtn = popup.querySelector('#ig-save-btn');
+
+              window.addEventListener('touchstart', function (e) {
+                  if (e.touches.length !== 1) return;
+                  const touch = e.touches[0];
+                  startX = touch.clientX;
+                  startY = touch.clientY;
+                  targetPoint = { x: startX, y: startY };
+
+                  clearTimeout(pressTimer);
+                  pressTimer = setTimeout(() => {
+                      triggerHaptic();
+                      popup.style.left = `${Math.min(Math.max(startX, 90), window.innerWidth - 90)}px`;
+                      popup.style.top = `${Math.max(startY - 14, 60)}px`;
+                      popup.style.display = 'block';
+                      requestAnimationFrame(() => {
+                          saveBtn.style.transform = 'scale(1)';
+                          saveBtn.style.opacity = '1';
+                      });
+                  }, 450);
+              }, { capture: true, passive: true });
+
+              window.addEventListener('touchmove', function (e) {
+                  if (!pressTimer) return;
+                  if (Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 15) {
+                      clearTimeout(pressTimer);
+                      pressTimer = null;
+                  }
+              }, { capture: true, passive: true });
+
+              window.addEventListener('touchend', function () {
+                  clearTimeout(pressTimer);
+                  pressTimer = null;
+              }, { capture: true, passive: true });
+
+              window.addEventListener('touchstart', function (e) {
+                  if (popup.style.display === 'block' && !popup.contains(e.target)) {
+                      saveBtn.style.transform = 'scale(0.6)';
+                      saveBtn.style.opacity = '0';
+                      setTimeout(() => { popup.style.display = 'none'; }, 150);
+                  }
+              }, { capture: false, passive: true });
+
+              saveBtn.addEventListener('click', function (e) {
+                  e.stopPropagation();
+                  triggerHaptic();
+                  saveBtn.style.transform = 'scale(0.6)';
+                  saveBtn.style.opacity = '0';
+                  setTimeout(() => { popup.style.display = 'none'; }, 150);
+
+                  let mediaUrl = '';
+                  const elements = document.elementsFromPoint(targetPoint.x, targetPoint.y);
+
+                  for (let el of elements) {
+                      if (el.tagName === 'VIDEO' && el.src) { mediaUrl = el.src; break; }
+                      const v = el.querySelector('video');
+                      if (v && v.src) { mediaUrl = v.src; break; }
+                      if (el.tagName === 'IMG' && el.src && !el.src.includes('profile_pic')) { mediaUrl = el.src; break; }
+                      const img = el.querySelector('img');
+                      if (img && img.src && !img.src.includes('profile_pic')) { mediaUrl = img.src; break; }
+                  }
+
+                  if (mediaUrl) {
+                      window.location.href = mediaUrl;
+                  } else {
+                      alert('Media not found on this slide.');
+                  }
+              });
+          })();
+          EOF
+
       - name: Build Debug APK
         run: gradle assembleDebug --stacktrace
 
