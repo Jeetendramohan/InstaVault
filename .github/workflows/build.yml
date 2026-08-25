@@ -13,19 +13,23 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Clean Old Files
+        run: |
+          rm -rf app settings.gradle build.gradle gradle*
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Standalone Gradle
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
-          unzip -q gradle-8.2-bin.zip
-          echo "$GITHUB_WORKSPACE/gradle-8.2/bin" >> $GITHUB_PATH
+      - name: Setup Gradle (No Cache)
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+          cache-disabled: true
 
-      - name: Generate All Project Files & Assets
+      - name: Generate All Clean Project Files
         run: |
           mkdir -p app/src/main/java/com/myinsta/app
           mkdir -p app/src/main/res/layout
@@ -215,8 +219,7 @@ jobs:
                               byte[] buffer = new byte[input.available()];
                               input.read(buffer);
                               input.close();
-                              String jsCode = new String(buffer);
-                              webView.evaluateJavascript(jsCode, null);
+                              webView.evaluateJavascript(new String(buffer), null);
                           } catch (Exception ignored) {}
                       }
                   });
@@ -520,7 +523,7 @@ jobs:
           EOF
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
